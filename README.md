@@ -19,6 +19,7 @@ Ken Suzuki, *Propagational Investment Currency SYstem (PICSY): Proposing a New C
 | パス | 中身 |
 |---|---|
 | `docs/spec.md` | 仕様書（仮想中央銀行法）。論文の式番号との対応、未定義箇所の決定 |
+| `docs/related-work.md` | 先行研究と新規性の判定 |
 | `docs/experiments/` | シミュレーションの実験記録 |
 | `docs/resources/` | 一次資料の置き場（ローカルのみ） |
 | `lean/` | Lean 4 + Mathlib による性質の証明（P1〜P8 済み）。`lake exe cache get` → `lake build` |
