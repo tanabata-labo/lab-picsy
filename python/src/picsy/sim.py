@@ -29,6 +29,7 @@ from .core import (
     invariant_errors,
     recover,
     transact,
+    uniform_J,
 )
 
 
@@ -46,6 +47,7 @@ class Config:
     farm_groups: int = 1
     farm_start: int = 0  # このエポックから共謀を始める（それまでは普通に取引する）
     seed: int = 0
+    init_mix: float = 0.0  # 初期状態 E = (1-m)I + mJ（D11 の既定は m=0、つまり E=I）
 
 
 def gini(x: np.ndarray) -> float:
@@ -61,10 +63,12 @@ def second_eigen(M: np.ndarray) -> float:
     return float(w[-2])
 
 
-def run(cfg: Config, out: Path | None = None) -> list[dict]:
+def run(cfg: Config, out: Path | None = None, return_state: bool = False):
     rng = np.random.default_rng(cfg.seed)
-    st: State = initial(cfg.N)
     N = cfg.N
+    st: State = initial(N)
+    if cfg.init_mix:
+        st = State((1 - cfg.init_mix) * st.E + cfg.init_mix * uniform_J(N))
     pop = 1.0 / np.arange(1, N + 1) ** cfg.zipf
     pop = rng.permutation(pop)
     farm = list(range(cfg.link_farm))
@@ -147,4 +151,6 @@ def run(cfg: Config, out: Path | None = None) -> list[dict]:
             w.writeheader()
             w.writerows(records)
         out.with_suffix(".config.txt").write_text(repr(asdict(cfg)), encoding="utf-8")
+    if return_state:
+        return records, st
     return records
