@@ -5,7 +5,7 @@
 | 性質 | 定理 | 状態 |
 |---|---|---|
 | P1 | `vcb_stochastic`, `vcb_diag` | 証明済み |
-| P2 | — | 未着手 |
+| P2 | `vcb_offdiag_pos`, `stationary_unique`, `contributions_unique`, `contributions_unique_after_recover` | 証明済み。全員の予算が正なら c は一意。ペロン＝フロベニウスを使わず、P8 の `flow_balance` を2解の差に当てる。自然回収の直後は常に一意 |
 | P3 | `transact_stochastic` | 証明済み |
 | P4 | `recover_stochastic`, `recover_budget`, `vcb_recover` | 証明済み |
 | P5 | `join_stochastic`, `join_fixed_point` | 証明済み。新メンバーを `none` とする `Option n` 上で、加入前の固定点 c に1を足したものが加入後も固定点 |

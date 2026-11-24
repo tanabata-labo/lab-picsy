@@ -21,5 +21,5 @@ Ken Suzuki, *Propagational Investment Currency SYstem (PICSY): Proposing a New C
 | `docs/spec.md` | 仕様書（仮想中央銀行法）。論文の式番号との対応、未定義箇所の決定 |
 | `docs/experiments/` | シミュレーションの実験記録 |
 | `docs/resources/` | 一次資料の置き場（ローカルのみ） |
-| `lean/` | Lean 4 + Mathlib による性質の証明（P1・P3〜P8 済み、P2 は未着手）。`lake exe cache get` → `lake build` |
+| `lean/` | Lean 4 + Mathlib による性質の証明（P1〜P8 済み）。`lake exe cache get` → `lake build` |
 | `python/` | 参照実装（`picsy.core`）、シミュレータ（`picsy.sim`）、性質テスト。`uv sync` → `uv run pytest` |

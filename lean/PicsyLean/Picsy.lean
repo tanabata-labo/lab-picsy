@@ -309,6 +309,97 @@ theorem farm_share_bound (hN : 2 ≤ Fintype.card n) (E : Mat n) (hE : IsStochas
     _ = β * (∑ i ∈ S, c i + ∑ k ∈ Sᶜ, c k) := by ring
     _ = β * Fintype.card n := by rw [hs, hsum]
 
+/-! ### P2: 全員の予算が正なら、貢献度は一意に決まる
+
+ペロン＝フロベニウスの定理は使わない。2つの定常解の差 d も定常（成分の和は0）なので、
+d が正の人の組 S に `flow_balance` を当てはめる。S から外への流れは非負、外から S への流れは
+非正なので、どちらも0。E' の非対角が正なら、S が空でも全体でもない限り S から外への流れは正になり、
+矛盾する。S が全体なら和が正になって矛盾する。よって d ≤ 0。-d にも同じ議論を当てて d = 0。
+
+既約性・非周期性は経由しない（非周期性は、べき乗法を使わない決定 D3 のもとでは要らない）。
+解の存在は扱わない。 -/
+
+/-- P2 の前半: 全員の予算が正なら、E' の非対角はすべて正。 -/
+theorem vcb_offdiag_pos (hN : 2 ≤ Fintype.card n) (E : Mat n) (hE : IsStochastic E)
+    (hpos : ∀ i, 0 < E i i) (i j : n) (hij : i ≠ j) : 0 < vcb E i j := by
+  have hden : (0 : ℚ) < (Fintype.card n : ℚ) - 1 := by
+    have : (2 : ℚ) ≤ Fintype.card n := by exact_mod_cast hN
+    linarith
+  simp only [vcb, hij, ite_false]
+  exact add_pos_of_nonneg_of_pos (hE.1 i j) (div_pos (hpos i) hden)
+
+/-- 非対角が正の行確率行列では、和が0の定常ベクトルは非正。 -/
+theorem stationary_nonpos (M : Mat n) (hM0 : ∀ i j, 0 ≤ M i j) (hM : ∀ i, ∑ j, M i j = 1)
+    (hoff : ∀ i j, i ≠ j → 0 < M i j)
+    (d : n → ℚ) (hd : ∀ j, ∑ i, d i * M i j = d j) (hsum : ∑ i, d i = 0) :
+    ∀ i, d i ≤ 0 := by
+  by_contra h
+  push_neg at h
+  obtain ⟨i, hi⟩ := h
+  set S := univ.filter (fun k => 0 < d k) with hSdef
+  have hiS : i ∈ S := by simp [hSdef, hi]
+  have hbal := flow_balance M hM S d hd
+  have hout : 0 ≤ ∑ k ∈ S, d k * ∑ j ∈ Sᶜ, M k j :=
+    sum_nonneg fun k hk => by
+      have : 0 < d k := by simpa [hSdef] using hk
+      exact mul_nonneg this.le (sum_nonneg fun j _ => hM0 k j)
+  have hin : ∑ k ∈ Sᶜ, d k * ∑ j ∈ S, M k j ≤ 0 :=
+    sum_nonpos fun k hk => by
+      have : d k ≤ 0 := by
+        have : ¬ 0 < d k := by simpa [hSdef] using hk
+        linarith
+      nlinarith [mul_nonneg (neg_nonneg.mpr this) (sum_nonneg fun j (_ : j ∈ S) => hM0 k j)]
+  have hzero : ∑ k ∈ S, d k * ∑ j ∈ Sᶜ, M k j = 0 := by linarith
+  by_cases hall : ∀ k, 0 < d k
+  · have : 0 < ∑ k, d k := sum_pos (fun k _ => hall k) ⟨i, mem_univ i⟩
+    linarith
+  · push_neg at hall
+    obtain ⟨j, hj⟩ := hall
+    have hjS : j ∈ Sᶜ := by simp [hSdef]; linarith
+    have hij : i ≠ j := fun h => by rw [h] at hi; linarith
+    have hterm : d i * ∑ j ∈ Sᶜ, M i j = 0 :=
+      (sum_eq_zero_iff_of_nonneg fun k hk => by
+          have : 0 < d k := by simpa [hSdef] using hk
+          exact mul_nonneg this.le (sum_nonneg fun j _ => hM0 k j)).mp hzero i hiS
+    have hflow : 0 < ∑ j ∈ Sᶜ, M i j :=
+      lt_of_lt_of_le (hoff i j hij) (single_le_sum (fun k _ => hM0 i k) hjS)
+    have : 0 < d i * ∑ j ∈ Sᶜ, M i j := mul_pos hi hflow
+    linarith
+
+/-- 非対角が正の行確率行列では、和が等しい定常ベクトルは一致する。 -/
+theorem stationary_unique (M : Mat n) (hM0 : ∀ i j, 0 ≤ M i j) (hM : ∀ i, ∑ j, M i j = 1)
+    (hoff : ∀ i j, i ≠ j → 0 < M i j)
+    (c c' : n → ℚ) (hc : ∀ j, ∑ i, c i * M i j = c j) (hc' : ∀ j, ∑ i, c' i * M i j = c' j)
+    (hsum : ∑ i, c i = ∑ i, c' i) : c = c' := by
+  have hd : ∀ j, ∑ i, (c i - c' i) * M i j = c j - c' j := by
+    intro j; simp only [sub_mul, sum_sub_distrib, hc j, hc' j]
+  have hd' : ∀ j, ∑ i, (c' i - c i) * M i j = c' j - c j := by
+    intro j; simp only [sub_mul, sum_sub_distrib, hc j, hc' j]
+  have hs : ∑ i, (c i - c' i) = 0 := by rw [sum_sub_distrib]; linarith
+  have hs' : ∑ i, (c' i - c i) = 0 := by rw [sum_sub_distrib]; linarith
+  have h1 := stationary_nonpos M hM0 hM hoff _ hd hs
+  have h2 := stationary_nonpos M hM0 hM hoff _ hd' hs'
+  funext i
+  linarith [h1 i, h2 i]
+
+/-- P2: 全員の予算が正なら、c E' = c かつ Σc = N を満たす c はただ1つ。 -/
+theorem contributions_unique (hN : 2 ≤ Fintype.card n) (E : Mat n) (hE : IsStochastic E)
+    (hpos : ∀ i, 0 < E i i) (c c' : n → ℚ)
+    (hc : ∀ j, ∑ i, c i * vcb E i j = c j) (hc' : ∀ j, ∑ i, c' i * vcb E i j = c' j)
+    (hsum : ∑ i, c i = ∑ i, c' i) : c = c' :=
+  have hV := vcb_stochastic hN E hE
+  stationary_unique (vcb E) hV.1 hV.2 (vcb_offdiag_pos hN E hE hpos) c c' hc hc' hsum
+
+/-- 自然回収（0 < γ ≤ 1）の直後は、予算制約の下限 D12 が無くても貢献度は一意に決まる。
+一意性が崩れうるのは、自然回収と自然回収のあいだに予算を使い切った人が出たときだけである。 -/
+theorem contributions_unique_after_recover (hN : 2 ≤ Fintype.card n) (E : Mat n)
+    (hE : IsStochastic E) (γ : ℚ) (hγ0 : 0 < γ) (hγ1 : γ ≤ 1) (c c' : n → ℚ)
+    (hc : ∀ j, ∑ i, c i * vcb (recover E γ) i j = c j)
+    (hc' : ∀ j, ∑ i, c' i * vcb (recover E γ) i j = c' j)
+    (hsum : ∑ i, c i = ∑ i, c' i) : c = c' :=
+  contributions_unique hN (recover E γ) (recover_stochastic E hE γ hγ0.le hγ1)
+    (fun i => lt_of_lt_of_le hγ0 (recover_budget E hE γ hγ1 i)) c c' hc hc' hsum
+
 /-! ### P5: 加入（論文 (3.69)）は不変条件を保ち、既存メンバーの貢献度を変えない
 
 新メンバーを `none`、既存メンバー i を `some i` で表す。 -/
