@@ -181,6 +181,32 @@ def transact(st: State, b: int, s: int, alpha) -> State:
     return State(E, st.frozen)
 
 
+def remaining(alpha, gammas):
+    """取引の量 alpha が、その後の自然回収（回収率の列 gammas）を経て残っている量（D13）。"""
+    for g in gammas:
+        alpha = (1 - g) * alpha
+    return alpha
+
+
+def cancel(st: State, b: int, s: int, amount) -> State:
+    """取引の取り消し（D13）。amount は remaining(alpha, その後の回収率の列)。
+
+    E_bb += amount、E_bs -= amount。あいだに取引と自然回収だけが挟まっていれば、
+    結果はその取引をしなかった場合の状態に一致する（Lean の cancel_exact）。
+    凍結中のメンバーが関わる取引も取り消せる。除去されたメンバーが関わる取引は取り消せない。
+    """
+    if b == s:
+        raise InvalidOperation("自分との取引は無い")
+    if not 0 <= b < st.N or not 0 <= s < st.N:
+        raise InvalidOperation("存在しないメンバー")
+    if not (0 < amount <= st.E[b, s]):
+        raise InvalidOperation(f"amount={amount} が評価 E_bs={st.E[b, s]} の範囲外")
+    E = st.E.copy()
+    E[b, b] = E[b, b] + amount
+    E[b, s] = E[b, s] - amount
+    return State(E, st.frozen)
+
+
 def recover(st: State, gamma) -> State:
     """自然回収 E <- (1-gamma)E + gamma I を全員に同時に（論文 (3.67)(3.68)、D7）。
 

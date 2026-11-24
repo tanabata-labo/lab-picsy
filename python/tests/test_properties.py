@@ -1,4 +1,4 @@
-"""spec §5 の性質 P1〜P6 と決定 D4・D5 を、有理数で厳密に検査する。"""
+"""spec §5 の性質 P1〜P6 と決定 D4・D5・D13 を、有理数で厳密に検査する。"""
 
 from fractions import Fraction
 
@@ -9,6 +9,8 @@ from hypothesis import strategies as st
 
 from picsy.core import (
     InvalidOperation,
+    cancel,
+    remaining,
     NotUnique,
     State,
     contributions,
@@ -106,6 +108,36 @@ def test_P6_removal_preserves_invariants(E, data):
     st2 = remove(freeze(State(E), d), d)
     assert st2.N == len(E) - 1
     assert is_stochastic(st2.E)
+
+
+@settings(max_examples=80)
+@given(eval_matrix(positive_budget=True), st.data())
+def test_D13_cancel_restores_counterfactual(E, data):
+    """取引のあとに取引・自然回収を混ぜた列が続いても、残量を差し引けば
+    「その取引が無かった列」の結果に正確に一致する（Lean の cancel_exact・cancel_stochastic）。"""
+    n = len(E)
+    b = data.draw(st.integers(0, n - 1))
+    s = data.draw(st.sampled_from([j for j in range(n) if j != b]))
+    alpha = E[b, b] * data.draw(st.fractions(min_value=F(1, 10), max_value=1, max_denominator=10))
+    actual = transact(State(E), b, s, alpha)
+    counter = State(E)
+    gammas = []
+    for _ in range(data.draw(st.integers(0, 6))):
+        if data.draw(st.booleans()):
+            g = data.draw(st.sampled_from([F(1, 20), F(1, 10), F(1, 2)]))
+            actual, counter = recover(actual, g), recover(counter, g)
+            gammas.append(g)
+        else:
+            b2 = data.draw(st.integers(0, n - 1))
+            s2 = data.draw(st.sampled_from([j for j in range(n) if j != b2]))
+            budget = actual.E[b2, b2]  # 実際の列で前提を満たす量にする
+            if budget == 0:
+                continue
+            a2 = budget * data.draw(st.sampled_from([F(1, 4), F(1, 2), F(1)]))
+            actual, counter = transact(actual, b2, s2, a2), transact(counter, b2, s2, a2)
+    undone = cancel(actual, b, s, remaining(alpha, gammas))
+    assert (undone.E == counter.E).all()
+    assert is_stochastic(undone.E)
 
 
 def test_frozen_member_cannot_trade():

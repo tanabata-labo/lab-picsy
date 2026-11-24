@@ -400,6 +400,123 @@ theorem contributions_unique_after_recover (hN : 2 ≤ Fintype.card n) (E : Mat 
   contributions_unique hN (recover E γ) (recover_stochastic E hE γ hγ0.le hγ1)
     (fun i => lt_of_lt_of_le hγ0 (recover_budget E hE γ hγ1 i)) c c' hc hc' hsum
 
+/-! ### P9: 取引の取り消し（決定 D13）
+
+取引は E に定数の行列 α(e_s − e_b)（行 b）を足す操作で、自然回収はアフィンな操作
+E ↦ (1-γ)E + γI である。そのため、ある取引が後の状態に残す影響は、あいだに別の取引が
+いくつ挟まっても、その後の自然回収の (1-γ) を掛け合わせた量 `decay` だけになる。
+取り消しは、その量を逆向きの取引として差し引く。結果は「その取引が無かった世界」の状態に
+正確に一致し、不変条件 I1・I2 も保たれる。加入・除去が挟まる場合は扱わない（spec D13）。 -/
+
+/-- 状態に順に適用する操作。 -/
+inductive Op (n : Type*)
+  | tx (b s : n) (α : ℚ)
+  | recov (γ : ℚ)
+
+/-- 操作の列を順に適用する。 -/
+def applyOps (E : Mat n) : List (Op n) → Mat n
+  | [] => E
+  | Op.tx b s α :: ops => applyOps (transact E b s α) ops
+  | Op.recov γ :: ops => applyOps (recover E γ) ops
+
+/-- 取引の量 α が、後続の操作のあとに残っている量。自然回収のたびに (1-γ) 倍になる。 -/
+def decay : List (Op n) → ℚ → ℚ
+  | [], α => α
+  | Op.tx _ _ _ :: ops, α => decay ops α
+  | Op.recov γ :: ops, α => decay ops ((1 - γ) * α)
+
+/-- 操作の列が、各時点の状態で前提を満たしていること（取引は D5、自然回収は 0 ≤ γ ≤ 1）。 -/
+def Valid : Mat n → List (Op n) → Prop
+  | _, [] => True
+  | E, Op.tx b s α :: ops => b ≠ s ∧ 0 ≤ α ∧ α ≤ E b b ∧ Valid (transact E b s α) ops
+  | E, Op.recov γ :: ops => 0 ≤ γ ∧ γ ≤ 1 ∧ Valid (recover E γ) ops
+
+/-- 2つの取引は順序を入れ替えられる。 -/
+lemma transact_comm (E : Mat n) (b s b' s' : n) (α α' : ℚ) :
+    transact (transact E b s α) b' s' α' = transact (transact E b' s' α') b s α := by
+  funext i j
+  simp only [transact]
+  split_ifs <;> ring
+
+/-- 取引のあとの自然回収は、自然回収のあとに (1-γ)α の取引をしたのと同じ。 -/
+lemma recover_transact (E : Mat n) (b s : n) (α γ : ℚ) :
+    recover (transact E b s α) γ = transact (recover E γ) b s ((1 - γ) * α) := by
+  funext i j
+  simp only [recover, transact]
+  split_ifs <;> ring
+
+/-- 同じ量の逆向きの取引で元に戻る。 -/
+lemma transact_neg (E : Mat n) (b s : n) (α : ℚ) :
+    transact (transact E b s α) b s (-α) = E := by
+  funext i j
+  simp only [transact]
+  split_ifs <;> ring
+
+/-- 取引の影響は、後続の操作のあとでもちょうど `decay` の量の取引として残る。 -/
+theorem applyOps_transact (ops : List (Op n)) (E : Mat n) (b s : n) (α : ℚ) :
+    applyOps (transact E b s α) ops = transact (applyOps E ops) b s (decay ops α) := by
+  induction ops generalizing E α with
+  | nil => rfl
+  | cons op ops ih =>
+    cases op with
+    | tx b' s' α' =>
+      simp only [applyOps, decay]
+      rw [transact_comm, ih]
+    | recov γ =>
+      simp only [applyOps, decay]
+      rw [recover_transact, ih]
+
+/-- D13: 取引 (b, s, α) のあとに操作列 ops が続いた状態から、残っている量 `decay ops α` を
+逆向きに差し引くと、その取引をしなかった場合の状態に正確に一致する。 -/
+theorem cancel_exact (ops : List (Op n)) (E : Mat n) (b s : n) (α : ℚ) :
+    transact (applyOps (transact E b s α) ops) b s (-(decay ops α)) = applyOps E ops := by
+  rw [applyOps_transact, transact_neg]
+
+/-- 前提を満たす操作列は不変条件を保つ。 -/
+theorem applyOps_stochastic (ops : List (Op n)) (E : Mat n) (hE : IsStochastic E)
+    (hv : Valid E ops) : IsStochastic (applyOps E ops) := by
+  induction ops generalizing E with
+  | nil => exact hE
+  | cons op ops ih =>
+    cases op with
+    | tx b s α =>
+      obtain ⟨hbs, hα0, hα, hv⟩ := hv
+      exact ih _ (transact_stochastic E hE b s α hbs hα0 hα) hv
+    | recov γ =>
+      obtain ⟨hγ0, hγ1, hv⟩ := hv
+      exact ih _ (recover_stochastic E hE γ hγ0 hγ1) hv
+
+/-- 前提を満たすかどうかは予算（対角）だけで決まり、予算が大きいほど満たしやすい。 -/
+theorem valid_mono (ops : List (Op n)) (E E' : Mat n) (hle : ∀ i, E i i ≤ E' i i)
+    (hv : Valid E ops) : Valid E' ops := by
+  induction ops generalizing E E' with
+  | nil => trivial
+  | cons op ops ih =>
+    cases op with
+    | tx b s α =>
+      obtain ⟨hbs, hα0, hα, hv⟩ := hv
+      refine ⟨hbs, hα0, le_trans hα (hle b), ih _ _ (fun i => ?_) hv⟩
+      by_cases hi : i = b
+      · subst hi; simp [transact]; linarith [hle i]
+      · simp [transact, hi, hle i]
+    | recov γ =>
+      obtain ⟨hγ0, hγ1, hv⟩ := hv
+      refine ⟨hγ0, hγ1, ih _ _ (fun i => ?_) hv⟩
+      simp only [recover, ite_true]
+      nlinarith [hle i]
+
+/-- 取り消し後の状態は不変条件を満たす。取り消しは買い手の予算を増やすだけなので、
+実際の列が前提を満たしていれば、取引の無かった列も前提を満たす。 -/
+theorem cancel_stochastic (ops : List (Op n)) (E : Mat n) (hE : IsStochastic E)
+    (b s : n) (α : ℚ) (hv : Valid E (Op.tx b s α :: ops)) :
+    IsStochastic (transact (applyOps (transact E b s α) ops) b s (-(decay ops α))) := by
+  rw [cancel_exact]
+  obtain ⟨_, hα0, _, hv⟩ := hv
+  refine applyOps_stochastic ops E hE (valid_mono ops _ E (fun i => ?_) hv)
+  by_cases hi : i = b
+  · subst hi; simp [transact]; linarith
+  · simp [transact, hi]
+
 /-! ### P5: 加入（論文 (3.69)）は不変条件を保ち、既存メンバーの貢献度を変えない
 
 新メンバーを `none`、既存メンバー i を `some i` で表す。 -/

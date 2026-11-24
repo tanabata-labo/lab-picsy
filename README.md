@@ -22,5 +22,5 @@ Ken Suzuki, *Propagational Investment Currency SYstem (PICSY): Proposing a New C
 | `docs/related-work.md` | 先行研究と新規性の判定 |
 | `docs/experiments/` | シミュレーションの実験記録 |
 | `docs/resources/` | 一次資料の置き場（ローカルのみ） |
-| `lean/` | Lean 4 + Mathlib による性質の証明（P1〜P8 済み）。`lake exe cache get` → `lake build` |
+| `lean/` | Lean 4 + Mathlib による性質の証明（P1〜P9 済み）。`lake exe cache get` → `lake build` |
 | `python/` | 参照実装（`picsy.core`）、シミュレータ（`picsy.sim`）、性質テスト。`uv sync` → `uv run pytest` |
