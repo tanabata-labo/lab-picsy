@@ -170,6 +170,12 @@ theorem cancel_exact (ops : List (Op n)) (E : Mat n) (b s : n) (α : ℚ) :
 
 PICSY が「機能し、破綻しないこと」は、少なくともこの範囲までは示せたと考えています。
 
+# あとがき
+
+この連載の仕様化、Lean の証明、シミュレーション、先行研究の調査は、大半を LLM のコーディングエージェント（Claude Code）と一緒に進め、1日で終わりました。論文の式を1つずつ確かめる、Lean の証明が通るまで直す、主張を実験の数字で裏付ける、といった小さな確認を何度も繰り返す仕事は、LLM の得意な領域だと感じました。一方で、予算を超える取引を拒否するか、共謀にどこまで耐えるかを調べるか、法と制度まで話を広げるか、といった問いと判断は、人の側から出しています。
+
+私にとっては、Lean を学ぶよい機会にもなりました。
+
 # 参考文献
 
 - Ken Suzuki, *Propagational Investment Currency SYstem (PICSY): Proposing a New Currency System Using Social Computing*, 博士論文, 東京大学, 2009
