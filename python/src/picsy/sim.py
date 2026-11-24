@@ -8,6 +8,11 @@ alpha が予算を超える取引は拒否して数える（D5）。
 link_farm > 0 のとき、先頭の link_farm 人が共謀して、毎エポックの最初に予算を全額
 仲間内に払う（論文 5.1節「budget constraints があるので link farm は難しい」の検証）。
 farm_groups > 1 なら共謀者を複数の組に分け、組の間では払わない。
+
+budget_floor = eps > 0 のとき、取引は予算を eps 未満まで使えない（E_bb - alpha >= eps）。
+共謀者も eps を残して払う。link farm 対策の候補（η 正則化と比べる）。
+
+out を渡すと、1エポックごとに CSV へ1行書いて flush する（途中で止まっても残る）。
 """
 
 from __future__ import annotations
@@ -48,6 +53,7 @@ class Config:
     farm_start: int = 0  # このエポックから共謀を始める（それまでは普通に取引する）
     seed: int = 0
     init_mix: float = 0.0  # 初期状態 E = (1-m)I + mJ（D11 の既定は m=0、つまり E=I）
+    budget_floor: float = 0.0  # 予算の下限 eps（取引で E_bb を eps 未満にしない）
 
 
 def gini(x: np.ndarray) -> float:
@@ -77,8 +83,14 @@ def run(cfg: Config, out: Path | None = None, return_state: bool = False):
     pop_h = pop[honest] / pop[honest].sum()
     price = cfg.price_mean * rng.lognormal(-cfg.price_sigma**2 / 2, cfg.price_sigma, N)
 
+    eps = cfg.budget_floor
     c = contributions(st.E, cfg.eta)
     records = []
+    f = w = None
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.with_suffix(".config.txt").write_text(repr(asdict(cfg)), encoding="utf-8")
+        f = out.open("w", newline="", encoding="utf-8")
     for ep in range(cfg.epochs):
         acc = dict(done=0, rejected=0, ratio=[], dcb=[], not_unique=0)
         # 共謀: 予算を全額、自分の組の次の人へ
@@ -90,8 +102,8 @@ def run(cfg: Config, out: Path | None = None, return_state: bool = False):
                 continue
             for k, b in enumerate(g):
                 s = g[(k + 1) % len(g)]
-                if st.E[b, b] > 0:
-                    st = transact(st, b, s, st.E[b, b])
+                if st.E[b, b] > eps:
+                    st = transact(st, b, s, st.E[b, b] - eps)
         try:
             c = contributions(st.E, cfg.eta)
         except NotUnique:
@@ -102,7 +114,7 @@ def run(cfg: Config, out: Path | None = None, return_state: bool = False):
             if b == s:
                 continue
             alpha = price[s] / c[b] if c[b] > 0 else np.inf
-            if not alpha <= st.E[b, b]:
+            if not alpha <= st.E[b, b] - eps:
                 acc["rejected"] += 1
                 continue
             st2 = transact(st, b, s, alpha)
@@ -139,18 +151,19 @@ def run(cfg: Config, out: Path | None = None, return_state: bool = False):
             rowsum_err=float(inv["max_rowsum_err"]),
         )
         records.append(rec)
+        if f:
+            if w is None:
+                w = csv.DictWriter(f, fieldnames=list(rec))
+                w.writeheader()
+            w.writerow(rec)
+            f.flush()
         st = recover(st, cfg.gamma)
         try:
             c = contributions(st.E, cfg.eta)
         except NotUnique:
             pass
-    if out:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        with out.open("w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=list(records[0]))
-            w.writeheader()
-            w.writerows(records)
-        out.with_suffix(".config.txt").write_text(repr(asdict(cfg)), encoding="utf-8")
+    if f:
+        f.close()
     if return_state:
         return records, st
     return records

@@ -226,6 +226,89 @@ theorem farm_absorbs (hN : 2 ≤ Fintype.card n) (E : Mat n) (hE : IsStochastic 
   · exact h
   · linarith
 
+/-! ### P8: 予算の下限 ε があれば、どの組の占有にも上限がある
+
+P7 の量的な強化。行確率行列 M と定常な c について、組 S から外への流れと外から S への流れは
+釣り合う（`flow_balance`）。S の全員が予算 ε 以上を持つなら、E' の行から外へ少なくとも
+ε·|Sᶜ|/(N-1) が漏れる。外の各人から S への流れが β 以下なら、S の貢献度の合計は
+c(S)·(ε|Sᶜ|/(N-1) + β) ≤ β·N で抑えられる。β = 1 は常に成り立つので、上限は必ずある。 -/
+
+/-- 流れの収支: 定常な c について、組 S から外へ流れ出る量と外から S へ流れ込む量は等しい。
+c の非負性は要らない。 -/
+theorem flow_balance (M : Mat n) (hM : ∀ i, ∑ j, M i j = 1) (S : Finset n) (c : n → ℚ)
+    (hc : ∀ j, ∑ i, c i * M i j = c j) :
+    ∑ k ∈ S, c k * ∑ j ∈ Sᶜ, M k j = ∑ k ∈ Sᶜ, c k * ∑ j ∈ S, M k j := by
+  have hrowc : ∀ k, ∑ j ∈ Sᶜ, M k j = 1 - ∑ j ∈ S, M k j := by
+    intro k
+    have := sum_add_sum_compl S (M k)
+    rw [hM k] at this
+    linarith
+  have hT : ∑ j ∈ Sᶜ, c j = ∑ k, c k * ∑ j ∈ Sᶜ, M k j := by
+    calc ∑ j ∈ Sᶜ, c j = ∑ j ∈ Sᶜ, ∑ k, c k * M k j :=
+          sum_congr rfl fun j _ => (hc j).symm
+      _ = ∑ k, ∑ j ∈ Sᶜ, c k * M k j := sum_comm
+      _ = ∑ k, c k * ∑ j ∈ Sᶜ, M k j := by simp_rw [mul_sum]
+  have hsplit := sum_add_sum_compl S (fun k => c k * ∑ j ∈ Sᶜ, M k j)
+  have hC : ∑ k ∈ Sᶜ, c k * ∑ j ∈ Sᶜ, M k j
+      = ∑ k ∈ Sᶜ, c k - ∑ k ∈ Sᶜ, c k * ∑ j ∈ S, M k j := by
+    rw [← sum_sub_distrib]
+    exact sum_congr rfl fun k _ => by rw [hrowc k]; ring
+  linarith
+
+/-- 組 S の全員の予算が ε 以上で、外の各人から S への E' の流れが β 以下なら、
+c(S) · ε|Sᶜ|/(N-1) ≤ β · c(Sᶜ)。 -/
+theorem farm_bound (hN : 2 ≤ Fintype.card n) (E : Mat n) (hE : IsStochastic E)
+    (S : Finset n) (ε β : ℚ) (hfloor : ∀ i ∈ S, ε ≤ E i i)
+    (hinflow : ∀ k ∉ S, ∑ j ∈ S, vcb E k j ≤ β)
+    (c : n → ℚ) (hc0 : ∀ i, 0 ≤ c i) (hc : ∀ j, ∑ i, c i * vcb E i j = c j) :
+    (∑ i ∈ S, c i) * (ε * (Sᶜ.card : ℚ) / (Fintype.card n - 1)) ≤ β * ∑ k ∈ Sᶜ, c k := by
+  have hpos : (0 : ℚ) < (Fintype.card n : ℚ) - 1 := by
+    have : (2 : ℚ) ≤ Fintype.card n := by exact_mod_cast hN
+    linarith
+  have hV := vcb_stochastic hN E hE
+  have hbal := flow_balance (vcb E) hV.2 S c hc
+  -- S の各人の行から、外へ少なくとも ε|Sᶜ|/(N-1) が漏れる
+  have hleak : ∀ i ∈ S,
+      ε * (Sᶜ.card : ℚ) / (Fintype.card n - 1) ≤ ∑ j ∈ Sᶜ, vcb E i j := by
+    intro i hi
+    have hj : ∀ j ∈ Sᶜ, ε / (Fintype.card n - 1) ≤ vcb E i j := by
+      intro j hj
+      have hij : i ≠ j := fun h => (mem_compl.mp hj) (h ▸ hi)
+      simp only [vcb, hij, ite_false]
+      have h1 : ε / (Fintype.card n - 1) ≤ E i i / (Fintype.card n - 1) :=
+        div_le_div_of_nonneg_right (hfloor i hi) hpos.le
+      linarith [hE.1 i j]
+    calc ε * (Sᶜ.card : ℚ) / (Fintype.card n - 1)
+        = ∑ j ∈ Sᶜ, ε / (Fintype.card n - 1) := by
+          rw [sum_const, nsmul_eq_mul]; ring
+      _ ≤ ∑ j ∈ Sᶜ, vcb E i j := sum_le_sum hj
+  calc (∑ i ∈ S, c i) * (ε * (Sᶜ.card : ℚ) / (Fintype.card n - 1))
+      = ∑ i ∈ S, c i * (ε * (Sᶜ.card : ℚ) / (Fintype.card n - 1)) := by rw [sum_mul]
+    _ ≤ ∑ i ∈ S, c i * ∑ j ∈ Sᶜ, vcb E i j :=
+        sum_le_sum fun i hi => mul_le_mul_of_nonneg_left (hleak i hi) (hc0 i)
+    _ = ∑ k ∈ Sᶜ, c k * ∑ j ∈ S, vcb E k j := hbal
+    _ ≤ ∑ k ∈ Sᶜ, c k * β :=
+        sum_le_sum fun k hk => mul_le_mul_of_nonneg_left (hinflow k (mem_compl.mp hk)) (hc0 k)
+    _ = β * ∑ k ∈ Sᶜ, c k := by rw [← sum_mul]; ring
+
+/-- 占有の形: Σc = N なら c(S) · (ε|Sᶜ|/(N-1) + β) ≤ β·N。
+つまり組の占有 c(S)/N は β / (β + ε|Sᶜ|/(N-1)) 以下。 -/
+theorem farm_share_bound (hN : 2 ≤ Fintype.card n) (E : Mat n) (hE : IsStochastic E)
+    (S : Finset n) (ε β : ℚ) (hfloor : ∀ i ∈ S, ε ≤ E i i)
+    (hinflow : ∀ k ∉ S, ∑ j ∈ S, vcb E k j ≤ β)
+    (c : n → ℚ) (hc0 : ∀ i, 0 ≤ c i) (hc : ∀ j, ∑ i, c i * vcb E i j = c j)
+    (hsum : ∑ i, c i = Fintype.card n) :
+    (∑ i ∈ S, c i) * (ε * (Sᶜ.card : ℚ) / (Fintype.card n - 1) + β)
+      ≤ β * Fintype.card n := by
+  have h := farm_bound hN E hE S ε β hfloor hinflow c hc0 hc
+  have hs := sum_add_sum_compl S c
+  calc (∑ i ∈ S, c i) * (ε * (Sᶜ.card : ℚ) / (Fintype.card n - 1) + β)
+      = (∑ i ∈ S, c i) * (ε * (Sᶜ.card : ℚ) / (Fintype.card n - 1)) + β * ∑ i ∈ S, c i := by
+        ring
+    _ ≤ β * ∑ k ∈ Sᶜ, c k + β * ∑ i ∈ S, c i := by linarith
+    _ = β * (∑ i ∈ S, c i + ∑ k ∈ Sᶜ, c k) := by ring
+    _ = β * Fintype.card n := by rw [hs, hsum]
+
 /-! ### P5: 加入（論文 (3.69)）は不変条件を保ち、既存メンバーの貢献度を変えない
 
 新メンバーを `none`、既存メンバー i を `some i` で表す。 -/
