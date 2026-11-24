@@ -8,7 +8,8 @@
 | P2 | — | 未着手 |
 | P3 | `transact_stochastic` | 証明済み |
 | P4 | `recover_stochastic`, `recover_budget`, `vcb_recover` | 証明済み |
-| P5 | — | 未着手（加入。型が `n` から `Option n` 等に変わる） |
-| P6 | — | 未着手（除去） |
+| P5 | `join_stochastic`, `join_fixed_point` | 証明済み。新メンバーを `none` とする `Option n` 上で、加入前の固定点 c に1を足したものが加入後も固定点 |
+| P6 | `remove_stochastic` | 証明済み。除去後の型は `{j // j ≠ d}` |
+| P7 | `farm_absorbs` | 証明済み。予算0で組の外を評価しない組 S があれば、組の外で予算が正の人の貢献度は0（link farm が吸収集合になる） |
 
 ビルド: `lake exe cache get` → `lake build`。`import Mathlib` は読み込みに20分以上かかったので、必要なモジュールだけを import している。

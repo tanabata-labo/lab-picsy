@@ -9,6 +9,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Field.Rat
+import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
@@ -144,5 +145,199 @@ theorem vcb_recover (hN : 2 ≤ Fintype.card n) (E : Mat n) (γ : ℚ) :
   · simp only [vcb, J, recover, h, ite_false, ite_true]
     field_simp
     ring
+
+/-! ### P6: 除去（決定 D9 の第2段）は不変条件を保つ -/
+
+/-- 離脱者 d の除去。他のメンバーが d に付けていた評価 E_id を、本人の予算 E_ii へ戻してから
+d の行と列を消す。結果はメンバーの型が `{j // j ≠ d}` の行列になる。 -/
+def remove (E : Mat n) (d : n) : Mat {j : n // j ≠ d} :=
+  fun i j => E i.1 j.1 + if i = j then E i.1 d else 0
+
+theorem remove_stochastic (E : Mat n) (hE : IsStochastic E) (d : n) :
+    IsStochastic (remove E d) := by
+  obtain ⟨hnn, hrow⟩ := hE
+  refine ⟨fun i j => ?_, fun i => ?_⟩
+  · have h1 := hnn i.1 j.1
+    have h2 := hnn i.1 d
+    unfold remove
+    split_ifs <;> linarith
+  · have h := hrow i.1
+    rw [Fintype.sum_eq_add_sum_subtype_ne _ d] at h
+    simp only [remove, sum_add_distrib, sum_ite_eq, mem_univ, ite_true]
+    linarith
+
+/-! ### P7: link farm は吸収集合になる
+
+予算を使い切った人（E_ii = 0）だけからなり、組の外を評価しない組 S があるとする。
+このとき定常な貢献度 c（c E' = c、c ≥ 0）では、組の外で予算が正の人の貢献度はすべて0になる。
+
+証明は流れの収支による。組の外にある貢献度の総量は、組の外から組へ流れ出る分
+（予算の社会的最低限 E_ii/(N-1) を通じて必ず正）と、組から外へ戻る分（0）が釣り合うときしか
+保存されない。 -/
+
+theorem farm_absorbs (hN : 2 ≤ Fintype.card n) (E : Mat n) (hE : IsStochastic E)
+    (S : Finset n) (hS : S.Nonempty)
+    (hbroke : ∀ i ∈ S, E i i = 0) (hclosed : ∀ i ∈ S, ∀ j ∉ S, E i j = 0)
+    (c : n → ℚ) (hc0 : ∀ i, 0 ≤ c i) (hc : ∀ j, ∑ i, c i * vcb E i j = c j)
+    (i : n) (hi : i ∉ S) (hbudget : 0 < E i i) : c i = 0 := by
+  have hpos : (0 : ℚ) < (Fintype.card n : ℚ) - 1 := by
+    have : (2 : ℚ) ≤ Fintype.card n := by exact_mod_cast hN
+    linarith
+  have hV := vcb_stochastic hN E hE
+  -- 組から外への E' の成分は0
+  have hzero : ∀ k ∈ S, ∀ j ∈ Sᶜ, vcb E k j = 0 := by
+    intro k hk j hj
+    have hj' : j ∉ S := mem_compl.mp hj
+    have hkj : k ≠ j := fun h => hj' (h ▸ hk)
+    simp [vcb, hkj, hclosed k hk j hj', hbroke k hk]
+  -- 各人について、外への行和 = 1 - 組への行和
+  have hrowc : ∀ k, ∑ j ∈ Sᶜ, vcb E k j = 1 - ∑ j ∈ S, vcb E k j := by
+    intro k
+    have := sum_add_sum_compl S (vcb E k)
+    rw [hV.2 k] at this
+    linarith
+  -- 外の総量の収支
+  have key : ∑ k ∈ Sᶜ, c k * ∑ j ∈ S, vcb E k j = 0 := by
+    have hT : ∑ j ∈ Sᶜ, c j = ∑ k, c k * ∑ j ∈ Sᶜ, vcb E k j := by
+      calc ∑ j ∈ Sᶜ, c j = ∑ j ∈ Sᶜ, ∑ k, c k * vcb E k j :=
+            sum_congr rfl fun j _ => (hc j).symm
+        _ = ∑ k, ∑ j ∈ Sᶜ, c k * vcb E k j := sum_comm
+        _ = ∑ k, c k * ∑ j ∈ Sᶜ, vcb E k j := by simp_rw [mul_sum]
+    have hsplit := sum_add_sum_compl S (fun k => c k * ∑ j ∈ Sᶜ, vcb E k j)
+    have hS' : ∑ k ∈ S, c k * ∑ j ∈ Sᶜ, vcb E k j = 0 :=
+      sum_eq_zero fun k hk => by rw [sum_eq_zero (hzero k hk), mul_zero]
+    have hC : ∑ k ∈ Sᶜ, c k * ∑ j ∈ Sᶜ, vcb E k j
+        = ∑ k ∈ Sᶜ, c k - ∑ k ∈ Sᶜ, c k * ∑ j ∈ S, vcb E k j := by
+      rw [← sum_sub_distrib]
+      exact sum_congr rfl fun k _ => by rw [hrowc k]; ring
+    linarith
+  have hterm : c i * ∑ j ∈ S, vcb E i j = 0 :=
+    (sum_eq_zero_iff_of_nonneg fun k _ => mul_nonneg (hc0 k) (sum_nonneg fun j _ => hV.1 k j)).mp
+      key i (mem_compl.mpr hi)
+  obtain ⟨s, hs⟩ := hS
+  have hsi : i ≠ s := fun h => hi (h ▸ hs)
+  have hflow : 0 < ∑ j ∈ S, vcb E i j := by
+    have h1 : vcb E i s ≤ ∑ j ∈ S, vcb E i j := single_le_sum (fun j _ => hV.1 i j) hs
+    have h2 : 0 < vcb E i s := by
+      simp only [vcb, hsi, ite_false]
+      exact add_pos_of_nonneg_of_pos (hE.1 i s) (div_pos hbudget hpos)
+    linarith
+  rcases mul_eq_zero.mp hterm with h | h
+  · exact h
+  · linarith
+
+/-! ### P5: 加入（論文 (3.69)）は不変条件を保ち、既存メンバーの貢献度を変えない
+
+新メンバーを `none`、既存メンバー i を `some i` で表す。 -/
+
+/-- N+1 人目の加入。c は加入直前の貢献度（決定 D8）。 -/
+def join (E : Mat n) (c : n → ℚ) : Mat (Option n) :=
+  fun i j =>
+    match i, j with
+    | some i, some j => if i = j then E i i else (Fintype.card n - 1) / Fintype.card n * E i j
+    | some i, none => (1 - E i i) / Fintype.card n
+    | none, some j => c j / Fintype.card n
+    | none, none => 0
+
+/-- 加入後の貢献度: 既存メンバーは据え置き、新メンバーは1。 -/
+def joinC (c : n → ℚ) : Option n → ℚ
+  | some i => c i
+  | none => 1
+
+section join
+variable (hN : 2 ≤ Fintype.card n)
+include hN
+
+omit hN in
+lemma card_option_sub_one : ((Fintype.card (Option n) : ℚ) - 1) = Fintype.card n := by
+  simp [Fintype.card_option]
+
+lemma cardQ_pos : (0 : ℚ) < Fintype.card n := by
+  have : (2 : ℚ) ≤ Fintype.card n := by exact_mod_cast hN
+  linarith
+
+lemma cardQ_sub_one_pos : (0 : ℚ) < Fintype.card n - 1 := by
+  have : (2 : ℚ) ≤ Fintype.card n := by exact_mod_cast hN
+  linarith
+
+theorem join_stochastic (E : Mat n) (hE : IsStochastic E) (c : n → ℚ)
+    (hc0 : ∀ i, 0 ≤ c i) (hcs : ∑ i, c i = Fintype.card n) :
+    IsStochastic (join E c) := by
+  obtain ⟨hnn, hrow⟩ := hE
+  have hNpos := cardQ_pos hN
+  have h1 := cardQ_sub_one_pos hN
+  have hle : ∀ i, E i i ≤ 1 := fun i => by
+    have := single_le_sum (fun j _ => hnn i j) (mem_univ i)
+    rw [hrow i] at this
+    exact this
+  refine ⟨fun i j => ?_, fun i => ?_⟩
+  · rcases i with _ | i <;> rcases j with _ | j <;> simp only [join]
+    · exact le_refl 0
+    · exact div_nonneg (hc0 j) hNpos.le
+    · exact div_nonneg (sub_nonneg.mpr (hle i)) hNpos.le
+    · split_ifs
+      · exact hnn i i
+      · exact mul_nonneg (div_nonneg h1.le hNpos.le) (hnn i j)
+  · rw [Fintype.sum_option]
+    rcases i with _ | i
+    · simp only [join, div_eq_mul_inv]
+      rw [← sum_mul, hcs, mul_inv_cancel₀ hNpos.ne']
+      ring
+    · simp only [join]
+      have h := hrow i
+      rw [sum_split_diag _ i] at h
+      rw [sum_split_diag _ i, if_pos rfl]
+      have : ∑ j ∈ univ.erase i, (if i = j then E i i else
+          (Fintype.card n - 1) / Fintype.card n * E i j)
+          = (Fintype.card n - 1) / Fintype.card n * ∑ j ∈ univ.erase i, E i j := by
+        rw [mul_sum]
+        refine sum_congr rfl fun j hj => ?_
+        rw [if_neg (fun h => (ne_of_mem_erase hj) h.symm)]
+      have hs : ∑ j ∈ univ.erase i, E i j = 1 - E i i := by linarith
+      rw [this, hs]
+      field_simp
+      ring
+
+/-- 加入後の E' の成分。既存メンバーどうしは加入前の E' の (N-1)/N 倍にそろう。 -/
+lemma vcb_join_some_some (E : Mat n) (c : n → ℚ) (i j : n) :
+    vcb (join E c) (some i) (some j) = (Fintype.card n - 1) / Fintype.card n * vcb E i j := by
+  have hNpos := cardQ_pos hN
+  have h1 := cardQ_sub_one_pos hN
+  by_cases h : i = j
+  · subst h; simp [vcb]
+  · simp only [vcb, join, Option.some.injEq, h, ite_false, card_option_sub_one, ite_true]
+    field_simp
+
+omit hN in
+lemma vcb_join_none_some (E : Mat n) (c : n → ℚ) (j : n) :
+    vcb (join E c) none (some j) = c j / Fintype.card n := by
+  simp [vcb, join]
+
+theorem join_fixed_point (E : Mat n) (c : n → ℚ) (hcs : ∑ i, c i = Fintype.card n)
+    (hc : ∀ j, ∑ i, c i * vcb E i j = c j) :
+    ∀ j, ∑ i, joinC c i * vcb (join E c) i j = joinC c j := by
+  have hNpos := cardQ_pos hN
+  intro j
+  rw [Fintype.sum_option]
+  rcases j with _ | j
+  · -- 新メンバーの列: Σ c_i * (1/N) = 1
+    have hcol : ∀ i, vcb (join E c) (some i) none = 1 / Fintype.card n := by
+      intro i
+      simp only [vcb, join, reduceCtorEq, ite_false, card_option_sub_one, ite_true]
+      field_simp
+      ring
+    simp only [joinC, hcol, vcb_diag, mul_zero, zero_add]
+    rw [← sum_mul, hcs]
+    field_simp
+  · simp only [joinC, vcb_join_some_some hN, vcb_join_none_some]
+    have : ∑ i, c i * ((Fintype.card n - 1) / Fintype.card n * vcb E i j)
+        = (Fintype.card n - 1) / Fintype.card n * c j := by
+      rw [← hc j, mul_sum]
+      exact sum_congr rfl fun i _ => by ring
+    rw [this]
+    field_simp
+    ring
+
+end join
 
 end Picsy
