@@ -1,0 +1,19 @@
+[project]
+name = "picsy"
+version = "0.1.0"
+description = "PICSY（仮想中央銀行法）の参照実装とシミュレーション"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy"]
+
+[dependency-groups]
+dev = ["pytest", "hypothesis"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/picsy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
